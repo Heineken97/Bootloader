@@ -1,0 +1,12 @@
+ASM_FILES = ./src/main ./src/applicacion
+all: $(ASM_FILES)
+	cat main.bin applicacion.bin > Applicacion_Bootloader
+	rm *.bin
+	mv Aplicacion_Bootloader applicacion.bin
+$(ASM_FILES):
+	nasm -f bin $@.asm -o $@.bin
+	mv $@.bin ./
+clean:
+	rm *.bin
+run:
+	qemu-system-i386 -drive format=raw,file=applicacion.bin
