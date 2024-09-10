@@ -101,6 +101,7 @@ draw_names:
 	ret
 
 draw_name:
+	mov ah, 0Ah              ; Atributo de color
 .next_char:
 	lodsb                    ; Cargar carácter
 	cmp al, 0
