@@ -2,7 +2,7 @@ org 0x7c00
 %define SECTOR_AMOUNT 0x4	; Cantidad de Sectores a leer
 jmp short begin
 
-welcome_message: db 'Bienvenido a nuestra Aplicacion, Presiona Enter para iniciar'
+welcome_message: db 'Bienvenido a nuestra Aplicacion, Presiona la tecla Espacio para iniciar'
 .len equ ($-welcome_message)
 
 begin:
@@ -32,7 +32,7 @@ key_espacio:
 	mov ah, 0	; Función (0): Leer tecla presionada
 	int 16h         ; Llamar a la interrupción del teclado BIOS
 	cmp al, 20h     ; Verificar si la tecla presionada fue "Space"
-	jne key_space	; Si no fue "Space", espera
+	jne key_espacio	; Si no fue "Space", espera
 
 	;; Limpiar pantalla antes de continuar
 	mov ax, 2020h   ; AH = Fondo (2 = verde), AL = Espacio ASCII (0)
@@ -41,7 +41,7 @@ key_espacio:
 	rep stosw       ; Escribir todos los caracteres Memoria de video
 
 	;; Salta a la aplicacion
-	jmp application
+	jmp to_play
 
 to_play:
 	cli		; Desactivar interrupciones

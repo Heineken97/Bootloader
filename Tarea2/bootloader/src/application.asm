@@ -126,17 +126,17 @@ rotate_90_left:
     	mov [nameX], bx
     	mov [nameY], ax
     	; Ajustar la posición para reflejar la rotación
-    	sub [nameX], 7
+    	sub word [nameX], 7       ; Corregido con tamaño de operación
     	ret
 rotate_90_right:
 	; Implementar lógica de rotación 90 grados a la derecha sobre el eje vertical
     	; Intercambiar las posiciones X y Y de los nombres
-   	 mov ax, [nameX]
+   	mov ax, [nameX]
     	mov bx, [nameY]
     	mov [nameX], bx
 	mov [nameY], ax
 	; Ajustar la posición para reflejar la rotación
-	add [nameX], 7
+	add word [nameX], 7       ; Corregido con tamaño de operación
 	ret
 rotate_180_up:
     	; Implementar lógica de rotación 180 grados hacia arriba sobre el eje horizontal
