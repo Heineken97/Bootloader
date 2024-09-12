@@ -1,200 +1,126 @@
-use16                	      ; Utilizar código de 16 bits
-org 8000            	      ; Comenzar en la dirección 0x8000
+use16           ; Asegura que se use código de 16 bits
+org 8000h       ; Comienza en 8000h
 
-;; CONSTANTES
-VIDMEM       equ 0B800h       ; Ubicación de la memoria de video en modo texto
-SCREENW      equ 80           ; Ancho de la pantalla (80 caracteres)
-SCREENH      equ 25           ; Altura de la pantalla (25 líneas)
-NAME1        db 'Nombre1', 0  ; Primer nombre
-NAME2        db 'Nombre2', 0  ; Segundo nombre
+;; CONSTANTES =====================================================
+SCREEN_WIDTH        equ 320     ; Ancho de pantalla en píxeles
+SCREEN_HEIGHT       equ 200     ; Altura de pantalla en píxeles
+VIDEO_MEMORY        equ 0A000h  ; Memoria de video VGA
+SPRITE_SIZE         equ 16      ; Tamaño del sprite
+SPRITE_WIDTH_PIXELS equ 16      ; Ancho del sprite en píxeles
 
-;; VARIABLES
-name1X:      dw 0             ; Posición X inicial de NAME1
-name1Y:      dw 0             ; Posición Y inicial de NAME1
-name2X:      dw 0             ; Posición X inicial de NAME2
-name2Y:      dw 0             ; Posición Y inicial de NAME2
+;; Configurar el modo de video: Modo 13h VGA 320x200, 256 colores
+mov ax, 0013h
+int 10h
 
-;; LÓGICA
-setup:
-	; Configurar modo de video
-	mov ax, 3			; Modo de texto 80x25
-	int 10h
+;; Configurar la memoria de video
+mov ax, VIDEO_MEMORY
+mov es, ax          ; ES -> A0000h (memoria de video)
 
-	; Configurar memoria de video
-	mov ax, VIDMEM
-	mov es, ax      		; ES apunta a la memoria de video
+;; Configurar el fondo azul =======================================
+mov cx, SCREEN_WIDTH * SCREEN_HEIGHT
+mov al, 1           ; Color azul
+mov di, 0
+fill_screen:
+    stosb
+    loop fill_screen
 
-	; Generar posiciones aleatorias para ambos nombres
-	call random_position1
-	call random_position2
+;; Generar posiciones aleatorias =================================
+call random_position
+mov cx, position_x
+mov dx, position_y
 
-	; Dibujar los nombres
-	call draw_names
+;; Dibujar los dos cuadros =======================================
+call dibujar_1
+call random_position
+mov cx, position_x
+mov dx, position_y
+call dibujar_2
 
-main_loop:
-	; Obtener entrada del teclado
-	mov ah, 0			; Función BIOS para leer tecla presionada
-	int 16h
-	; Detectar flechas
-	cmp ah, 48h              ; Flecha arriba
-	je rotate_up
-	cmp ah, 50h              ; Flecha abajo
-	je rotate_down
-	cmp ah, 4Bh              ; Flecha izquierda
-	je rotate_left
-	cmp ah, 4Dh              ; Flecha derecha
-	je rotate_right
-	jmp main_loop
+jmp $
 
-rotate_left:
-	call clear_screen
-	call rotate_90_left
-	call draw_names
-	jmp main_loop
+;; SUBRUTINAS =====================================================
+;; Dibuja el primer cuadro en la pantalla
+dibujar_1:
+    ;; Definir el color del cuadro
+    mov bl, 0x0F  ; Color blanco brillante
 
-rotate_right:
-	call clear_screen
-	call rotate_90_right
-	call draw_names
-	jmp main_loop
+    ;; Dibujar el cuadro en la posición aleatoria
+    call get_screen_position
+    mov cx, SPRITE_SIZE
+    call draw_large_sprite
 
-rotate_up:
-	call clear_screen
-	call rotate_180_up
-	call draw_names
-	jmp main_loop
+    ret
 
-rotate_down:
-	call clear_screen
-	call rotate_180_down
-	call draw_names
-	jmp main_loop
+;; Dibuja el segundo cuadro en la pantalla
+dibujar_2:
+    ;; Definir el color del cuadro
+    mov bl, 0x0F  ; Color blanco brillante
 
-clear_screen:
-	mov ax, 0600h            ; Función para limpiar pantalla
-	mov bh, 01h              ; Color de fondo azul
-	mov cx, 0                ; Esquina superior izquierda
-	mov dx, 184Fh            ; Esquina inferior derecha
-	int 10h
-	ret
+    ;; Dibujar el cuadro en la posición aleatoria
+    call get_screen_position
+    mov cx, SPRITE_SIZE
+    call draw_large_sprite
 
-draw_names:
-	; Dibujar NAME1
-	mov ax, [name1Y]
-	mov cx, SCREENW
-	mul cx
-	add ax, [name1X]
-	mov di, ax
-	mov si, NAME1
-	mov ah, 0Fh              ; Color de texto blanco sobre fondo azul
-	call draw_name
+    ret
 
-	; Dibujar NAME2 en una posición distinta
-	mov ax, [name2Y]
-	mov cx, SCREENW
-	mul cx
-	add ax, [name2X]
-	mov di, ax
-	mov si, NAME2
-	mov ah, 0Fh              ; Color de texto blanco sobre fondo azul
-	call draw_name
-	ret
+;; Dibuja un sprite grande en la pantalla
+;; Los valores de entrada:
+;;   AL = valor de Y
+;;   AH = valor de X
+;;   BL = color del sprite
+draw_large_sprite:
+    call get_screen_position  ; Obtener la posición en pantalla (en DI)
+    mov cx, SPRITE_SIZE       ; Definir el tamaño del sprite
 
-draw_name:
-	mov ah, 0Ah              ; Atributo de color
-.next_char:
-	lodsb                    ; Cargar carácter
-	cmp al, 0
-	je .done                 ; Si es el final del nombre, salir
-	mov es:[di], al          ; Escribir carácter
-	inc di
-	mov es:[di], ah          ; Escribir atributo
-	inc di
-	jmp .next_char
-.done:
-	ret
+.next_line:
+    push cx
+    mov cx, SPRITE_WIDTH_PIXELS
+.next_pixel:
+    mov [es:di], bl       ; Dibujar el píxel
+    inc di                ; Moverse al siguiente píxel en la misma fila
+    loop .next_pixel      ; Repetir para toda la fila
 
-random_position1:
-	; Generar posiciones X e Y aleatorias para NAME1
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENW-10
-	div cx
-	mov [name1X], dx
+    add di, SCREEN_WIDTH - SPRITE_WIDTH_PIXELS  ; Ir a la siguiente línea
+    pop cx
+    loop .next_line
 
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENH-1
-	div cx
-	mov [name1Y], dx
-	ret
+    ret
 
-random_position2:
-	; Generar posiciones X e Y aleatorias para NAME2
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENW-10
-	div cx
-	mov [name2X], dx
+;; Obtener la posición en pantalla
+;; Entrada:
+;;   AL = Y
+;;   AH = X
+get_screen_position:
+    ;; Convertir la posición Y y X a un índice de pantalla
+    mov dx, ax      ; Guardar los valores de Y y X
+    cbw             ; Extender el signo de AL en AX
+    imul di, ax, SCREEN_WIDTH  ; DI = Y * SCREEN_WIDTH
+    mov al, dh      ; AL = X
+    add di, ax      ; DI = Y * SCREEN_WIDTH + X (posición en pantalla)
+    ret
 
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENH-1
-	div cx
-	mov [name2Y], dx
-	ret
+;; Generar posición aleatoria =====================================
+random_position:
+    ;; Leer valor del puerto 40h para usar como base para aleatoriedad
+    in al, 40h
+    and al, 0x1F      ; Obtener 5 bits menos significativos
+    mov bl, SCREEN_WIDTH - SPRITE_WIDTH_PIXELS
+    mul bl             ; Multiplicar por el ancho máximo permitido para X
+    mov [position_x], al
 
-random_number:
-	mov ah, 00h
-	int 1Ah
-	mov ax, dx
-	ret
+    ;; Leer otro valor del puerto 40h para la posición Y
+    in al, 40h
+    and al, 0x1F      ; Obtener 5 bits menos significativos
+    mov bl, SCREEN_HEIGHT - SPRITE_SIZE
+    mul bl             ; Multiplicar por la altura máxima permitida para Y
+    mov [position_y], al
 
-rotate_90_left:
-	; Intercambiar las posiciones X y Y de ambos nombres
-	mov ax, [name1X]
-	mov bx, [name1Y]
-	mov [name1X], bx
-	mov [name1Y], ax
+    ret
 
-	mov ax, [name2X]
-	mov bx, [name2Y]
-	mov [name2X], bx
-	mov [name2Y], ax
-	ret
+;; Datos ===========================================================
+position_x dw 0      ; Posición X del primer rectángulo
+position_y dw 0      ; Posición Y del primer rectángulo
 
-rotate_90_right:
-	; Intercambiar las posiciones X y Y de ambos nombres
-	mov ax, [name1X]
-	mov bx, [name1Y]
-	mov [name1X], bx
-	mov [name1Y], ax
-
-	mov ax, [name2X]
-	mov bx, [name2Y]
-	mov [name2X], bx
-	mov [name2Y], ax
-	ret
-
-rotate_180_up:
-	mov ax, SCREENH-1
-	sub ax, [name1Y]
-	mov [name1Y], ax
-	sub ax, [name2Y]
-	mov [name2Y], ax
-	ret
-
-rotate_180_down:
-	mov ax, SCREENH-1
-	sub ax, [name1Y]
-	mov [name1Y], ax
-	sub ax, [name2Y]
-	mov [name2Y], ax
-	ret
-
+;; Boot signature
 times 510-($-$$) db 0
-dw 0AA55h       ; Firma del sector de arranque
+dw 0xAA55
