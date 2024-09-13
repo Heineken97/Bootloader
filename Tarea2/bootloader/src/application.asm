@@ -64,6 +64,10 @@ check_key_press:
     je move_left
     cmp al, 'd'          ; Si es 'D' (derecha)
     je move_right
+    cmp al, 'q'          ; Si es 'Q' (salir)
+    je quit_program
+    cmp al, 'r'          ; Si es 'R' (reset)
+    je reset_program
 no_key:
     ret
 
@@ -122,6 +126,26 @@ random_position:
     mov bl, SCREEN_HEIGHT - 1
     mul bl
     mov [position_y], al
+    ret
+
+quit_program:
+    call clear_screen_black      ; Limpiar la pantalla con color negro
+    jmp halt_forever             ; Detener el programa con un bucle infinito
+
+clear_screen_black:
+    mov ax, 03h                  ; Volver al modo de texto 80x25 para limpiar correctamente
+    int 10h                      ; Configurar modo de texto 80x25 (negro por defecto)
+    ret
+
+halt_forever:
+    cli                          ; Desactivar interrupciones
+.halt_loop:
+    hlt                          ; Halt para detener la CPU indefinidamente
+    jmp .halt_loop                ; Bucle infinito
+    ret
+
+reset_program:
+    int 19h                      ; Interrupción de BIOS para reiniciar el sistema
     ret
 
 joseph_ruben_string db 'Joseph y Ruben', 0
