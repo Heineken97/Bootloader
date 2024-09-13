@@ -1,200 +1,95 @@
-use16                	      ; Utilizar código de 16 bits
-org 8000            	      ; Comenzar en la dirección 0x8000
+use16
+org 8000h
 
-;; CONSTANTES
-VIDMEM       equ 0B800h       ; Ubicación de la memoria de video en modo texto
-SCREENW      equ 80           ; Ancho de la pantalla (80 caracteres)
-SCREENH      equ 25           ; Altura de la pantalla (25 líneas)
-NAME1        db 'Nombre1', 0  ; Primer nombre
-NAME2        db 'Nombre2', 0  ; Segundo nombre
+SCREEN_WIDTH equ 320
+SCREEN_HEIGHT equ 200
+VIDEO_MEMORY equ 0A000h
+TEXT_MODE equ 03h
+CHAR_WIDTH equ 8
+CHAR_HEIGHT equ 16
 
-;; VARIABLES
-name1X:      dw 0             ; Posición X inicial de NAME1
-name1Y:      dw 0             ; Posición Y inicial de NAME1
-name2X:      dw 0             ; Posición X inicial de NAME2
-name2Y:      dw 0             ; Posición Y inicial de NAME2
+mov ax, 0013h
+int 10h
+mov ax, VIDEO_MEMORY
+mov es, ax
+mov al, 0x01
+mov cx, SCREEN_WIDTH * SCREEN_HEIGHT
+mov di, 0
+rep stosb
+mov ax, TEXT_MODE
+int 10h
 
-;; LÓGICA
-setup:
-	; Configurar modo de video
-	mov ax, 3			; Modo de texto 80x25
-	int 10h
+call random_position_1
+call write_string_Joseph
 
-	; Configurar memoria de video
-	mov ax, VIDMEM
-	mov es, ax      		; ES apunta a la memoria de video
+call random_position_2
+call write_string_Ruben
 
-	; Generar posiciones aleatorias para ambos nombres
-	call random_position1
-	call random_position2
+jmp $
 
-	; Dibujar los nombres
-	call draw_names
+write_string_Joseph:
+    mov si, joseph_string
+    call write_string
+    ret
 
-main_loop:
-	; Obtener entrada del teclado
-	mov ah, 0			; Función BIOS para leer tecla presionada
-	int 16h
-	; Detectar flechas
-	cmp ah, 48h              ; Flecha arriba
-	je rotate_up
-	cmp ah, 50h              ; Flecha abajo
-	je rotate_down
-	cmp ah, 4Bh              ; Flecha izquierda
-	je rotate_left
-	cmp ah, 4Dh              ; Flecha derecha
-	je rotate_right
-	jmp main_loop
+write_string_Ruben:
+    mov si, ruben_string
+    call write_string
+    ret
 
-rotate_left:
-	call clear_screen
-	call rotate_90_left
-	call draw_names
-	jmp main_loop
-
-rotate_right:
-	call clear_screen
-	call rotate_90_right
-	call draw_names
-	jmp main_loop
-
-rotate_up:
-	call clear_screen
-	call rotate_180_up
-	call draw_names
-	jmp main_loop
-
-rotate_down:
-	call clear_screen
-	call rotate_180_down
-	call draw_names
-	jmp main_loop
-
-clear_screen:
-	mov ax, 0600h            ; Función para limpiar pantalla
-	mov bh, 01h              ; Color de fondo azul
-	mov cx, 0                ; Esquina superior izquierda
-	mov dx, 184Fh            ; Esquina inferior derecha
-	int 10h
-	ret
-
-draw_names:
-	; Dibujar NAME1
-	mov ax, [name1Y]
-	mov cx, SCREENW
-	mul cx
-	add ax, [name1X]
-	mov di, ax
-	mov si, NAME1
-	mov ah, 0Fh              ; Color de texto blanco sobre fondo azul
-	call draw_name
-
-	; Dibujar NAME2 en una posición distinta
-	mov ax, [name2Y]
-	mov cx, SCREENW
-	mul cx
-	add ax, [name2X]
-	mov di, ax
-	mov si, NAME2
-	mov ah, 0Fh              ; Color de texto blanco sobre fondo azul
-	call draw_name
-	ret
-
-draw_name:
-	mov ah, 0Ah              ; Atributo de color
+write_string:
+    mov ah, 0x0F
+    mov bx, [position_x]
+    mov cx, [position_y]
+    call set_cursor_position
 .next_char:
-	lodsb                    ; Cargar carácter
-	cmp al, 0
-	je .done                 ; Si es el final del nombre, salir
-	mov es:[di], al          ; Escribir carácter
-	inc di
-	mov es:[di], ah          ; Escribir atributo
-	inc di
-	jmp .next_char
+    lodsb
+    or al, al
+    jz .done
+    mov ah, 0x0E
+    int 10h
+    jmp .next_char
 .done:
-	ret
+    ret
 
-random_position1:
-	; Generar posiciones X e Y aleatorias para NAME1
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENW-10
-	div cx
-	mov [name1X], dx
+set_cursor_position:
+    mov ax, cx
+    mov dx, bx
+    mov ah, 02h
+    int 10h
+    ret
 
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENH-1
-	div cx
-	mov [name1Y], dx
-	ret
+random_position_1:
+    in al, 40h
+    and al, 0x1F
+    mov bl, SCREEN_WIDTH / CHAR_WIDTH - 1
+    mul bl
+    mov [position_x], al
+    in al, 40h
+    and al, 0x1F
+    mov bl, SCREEN_HEIGHT / CHAR_HEIGHT - 1
+    mul bl
+    mov [position_y], al
+    ret
 
-random_position2:
-	; Generar posiciones X e Y aleatorias para NAME2
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENW-10
-	div cx
-	mov [name2X], dx
+random_position_2:
+    in al, 40h
+    and al, 0x1F
+    mov bl, SCREEN_WIDTH / CHAR_WIDTH - 1
+    mul bl
+    mov [position_x], al
+    in al, 40h
+    and al, 0x1F
+    mov bl, SCREEN_HEIGHT / CHAR_HEIGHT - 1
+    mul bl
+    mov [position_y], al
+    ret
 
-	call random_number
-	mov dx, ax
-	xor dx, dx
-	mov cx, SCREENH-1
-	div cx
-	mov [name2Y], dx
-	ret
+joseph_string db 'Joseph', 0
+ruben_string db 'Ruben', 0
 
-random_number:
-	mov ah, 00h
-	int 1Ah
-	mov ax, dx
-	ret
-
-rotate_90_left:
-	; Intercambiar las posiciones X y Y de ambos nombres
-	mov ax, [name1X]
-	mov bx, [name1Y]
-	mov [name1X], bx
-	mov [name1Y], ax
-
-	mov ax, [name2X]
-	mov bx, [name2Y]
-	mov [name2X], bx
-	mov [name2Y], ax
-	ret
-
-rotate_90_right:
-	; Intercambiar las posiciones X y Y de ambos nombres
-	mov ax, [name1X]
-	mov bx, [name1Y]
-	mov [name1X], bx
-	mov [name1Y], ax
-
-	mov ax, [name2X]
-	mov bx, [name2Y]
-	mov [name2X], bx
-	mov [name2Y], ax
-	ret
-
-rotate_180_up:
-	mov ax, SCREENH-1
-	sub ax, [name1Y]
-	mov [name1Y], ax
-	sub ax, [name2Y]
-	mov [name2Y], ax
-	ret
-
-rotate_180_down:
-	mov ax, SCREENH-1
-	sub ax, [name1Y]
-	mov [name1Y], ax
-	sub ax, [name2Y]
-	mov [name2Y], ax
-	ret
+position_x dw 0
+position_y dw 0
 
 times 510-($-$$) db 0
-dw 0AA55h       ; Firma del sector de arranque
+dw 0xAA55
