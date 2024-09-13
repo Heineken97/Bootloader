@@ -1,39 +1,24 @@
 use16
-org 8000h
+org 0x8000
 
-SCREEN_WIDTH equ 320
-SCREEN_HEIGHT equ 200
-VIDEO_MEMORY equ 0A000h
-TEXT_MODE equ 03h
+SCREEN_WIDTH equ 80      ; Ancho en caracteres del modo texto (80 columnas)
+SCREEN_HEIGHT equ 25     ; Alto en líneas de texto del modo texto (25 filas)
+VIDEO_MEMORY equ 0A000h  ; Memoria de video VGA
+TEXT_MODE equ 03h        ; Modo de texto 80x25
+STRING_LENGTH equ 15     ; Longitud del string "Joseph y Ruben" (14 caracteres + 1 terminador nulo)
 CHAR_WIDTH equ 8
 CHAR_HEIGHT equ 16
 
-mov ax, 0013h
-int 10h
-mov ax, VIDEO_MEMORY
-mov es, ax
-mov al, 0x01
-mov cx, SCREEN_WIDTH * SCREEN_HEIGHT
-mov di, 0
-rep stosb
 mov ax, TEXT_MODE
-int 10h
+int 10h                 ; Configurar el modo de texto 80x25
 
-call random_position_1
-call write_string_Joseph
+call random_position
+call write_string_Joseph_Ruben
 
-call random_position_2
-call write_string_Ruben
+jmp main_loop
 
-jmp $
-
-write_string_Joseph:
-    mov si, joseph_string
-    call write_string
-    ret
-
-write_string_Ruben:
-    mov si, ruben_string
+write_string_Joseph_Ruben:
+    mov si, joseph_ruben_string
     call write_string
     ret
 
@@ -59,34 +44,87 @@ set_cursor_position:
     int 10h
     ret
 
-random_position_1:
+main_loop:
+    call check_key_press
+    jmp main_loop
+
+check_key_press:
+    mov ah, 01h          ; Verificar si hay una tecla presionada
+    int 16h
+    jz no_key            ; Si no hay tecla presionada, saltar
+
+    mov ah, 00h          ; Obtener la tecla presionada
+    int 16h
+
+    cmp al, 'w'          ; Si es 'W' (arriba)
+    je move_up
+    cmp al, 's'          ; Si es 'S' (abajo)
+    je move_down
+    cmp al, 'a'          ; Si es 'A' (izquierda)
+    je move_left
+    cmp al, 'd'          ; Si es 'D' (derecha)
+    je move_right
+no_key:
+    ret
+
+move_up:
+    cmp word [position_x], SCREEN_WIDTH  ; Si ya está en la primera fila, no se mueve
+    jl no_move_up
+    sub word [position_x], SCREEN_WIDTH  ; Restar SCREEN_WIDTH para simular movimiento de una fila arriba
+no_move_up:
+    call clear_screen
+    call write_string_Joseph_Ruben
+    ret
+
+move_down:
+    cmp word [position_x], (SCREEN_HEIGHT - 1) * SCREEN_WIDTH  ; Asegurarse de no salir del límite inferior
+    jge no_move_down
+    add word [position_x], SCREEN_WIDTH  ; Sumar SCREEN_WIDTH para simular movimiento de una fila abajo
+no_move_down:
+    call clear_screen
+    call write_string_Joseph_Ruben
+    ret
+
+move_left:
+    cmp word [position_x], 0    ; Si ya está en la columna izquierda, no se mueve
+    je no_move_left
+    dec word [position_x]       ; Decrementa X (mueve hacia la izquierda)
+no_move_left:
+    call clear_screen
+    call write_string_Joseph_Ruben
+    ret
+
+move_right:
+    cmp word [position_x], SCREEN_WIDTH * SCREEN_HEIGHT - STRING_LENGTH  ; Corregido el límite de X para respetar el ancho del texto
+    je no_move_right
+    inc word [position_x]       ; Incrementa X (mueve hacia la derecha)
+no_move_right:
+    call clear_screen
+    call write_string_Joseph_Ruben
+    ret
+
+clear_screen:
+    mov ax, TEXT_MODE
+    int 10h
+    ret
+
+random_position:
+    ;; Generar una posición X aleatoria dentro del rango de la pantalla
     in al, 40h
     and al, 0x1F
-    mov bl, SCREEN_WIDTH / CHAR_WIDTH - 1
+    mov bl, SCREEN_WIDTH - STRING_LENGTH
     mul bl
     mov [position_x], al
+
+    ;; Generar una posición Y aleatoria dentro del rango de la pantalla
     in al, 40h
     and al, 0x1F
-    mov bl, SCREEN_HEIGHT / CHAR_HEIGHT - 1
+    mov bl, SCREEN_HEIGHT - 1
     mul bl
     mov [position_y], al
     ret
 
-random_position_2:
-    in al, 40h
-    and al, 0x1F
-    mov bl, SCREEN_WIDTH / CHAR_WIDTH - 1
-    mul bl
-    mov [position_x], al
-    in al, 40h
-    and al, 0x1F
-    mov bl, SCREEN_HEIGHT / CHAR_HEIGHT - 1
-    mul bl
-    mov [position_y], al
-    ret
-
-joseph_string db 'Joseph', 0
-ruben_string db 'Ruben', 0
+joseph_ruben_string db 'Joseph y Ruben', 0
 
 position_x dw 0
 position_y dw 0
