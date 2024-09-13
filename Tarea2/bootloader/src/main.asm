@@ -1,227 +1,79 @@
-use16
-org 8000h
+org 0x7c00
+%define SECTOR_AMOUNT 0x4	; Cantidad de Sectores a leer
+jmp short begin
 
-SCREEN_WIDTH equ 80        ; Ancho en caracteres del modo texto (80 columnas)
-SCREEN_HEIGHT equ 25       ; Alto en líneas de texto del modo texto (25 filas)
-TEXT_MODE equ 03h          ; Modo de texto 80x25
-STRING_LENGTH equ 15       ; Longitud total de la cadena de texto "Joseph y Ruben" (14 caracteres + 1 terminador nulo)
+welcome_message: db 'Bienvenido a nuestra Aplicacion, Presiona la tecla Espacio para iniciar'
+.len equ ($-welcome_message)
 
-mov ax, TEXT_MODE
-int 10h                   ; Configurar el modo de texto 80x25
+begin:
+	; Ocultar cursor de Interfaz
+	mov ah, 1	; Cursor modo texto
+	mov cx, 2607h	; CX = CH + CL: CH == Bit 5(2) -> Invisible && Scan Line Start(6), CL == Scan Line End(7)
+	int 10h		; Interrupción 10h (BIOS de video)
 
-call random_position_Joseph
-call write_string_Joseph
-call random_position_Ruben
-call write_string_Ruben
+	; Configurar memoria de Video
+	mov ax, 0B800h	; Memoria de video comienza en dirección 0xB8000
+	mov es, ax	; ES = Memoria video modo color texto (B8000)
+	xor di, di	; ES:di = Puntero
 
-jmp main_loop
+	;; Limpiar pantalla
+	mov ax, 2020h 	; AH = Fondo(2 = verde), AL = Espacio ASCII (0)
+	mov cx, 80*25	; Número de caracteres en la pantalla
+	rep stosw       ; Escribir todos los caracteres en Memoria de video
+	xor di, di	; Reset puntero video
 
-write_string_Joseph:
-    mov si, joseph_string
-    mov bx, [joseph_x]
-    mov cx, [joseph_y]
-    call write_string
-    ret
+	;; Visualizar mensaje
+	mov si, welcome_message
+	mov cx, welcome_message.len
+	call write_string
 
-write_string_Ruben:
-    mov si, ruben_string
-    mov bx, [ruben_x]
-    mov cx, [ruben_y]
-    call write_string
-    ret
+key_espacio:
+	;; Esperar la Tecla "Space"
+	mov ah, 0	; Función (0): Leer tecla presionada
+	int 16h         ; Llamar a la interrupción del teclado BIOS
+	cmp al, 20h     ; Verificar si la tecla presionada fue "Space"
+	jne key_espacio	; Si no fue "Space", espera
 
+	;; Limpiar pantalla antes de continuar
+	mov ax, 2020h   ; AH = Fondo (2 = verde), AL = Espacio ASCII (0)
+	mov cx, 80*25   ; Número de caracteres en la pantalla
+	xor di, di      ; Resetear puntero video
+	rep stosw       ; Escribir todos los caracteres Memoria de video
+
+	;; Salta a la aplicacion
+	jmp to_play
+
+to_play:
+	cli		; Desactivar interrupciones
+	xor ax, ax
+	mov ds, ax
+	mov ss, ax
+	mov es, ax
+	mov fs, ax
+	mov gs, ax
+	mov sp, 0x6ef0	; Configurar puntero
+	sti		; Reactivar interrupciones
+	mov ah, 0	; Funcion (0) para restablecer la unidad de disco
+	int 0x13	; Interrupción 13h (BIOS de sectores de disco)
+
+	mov bx, 0x8000	; Ubicacion de aplicacion
+	mov al, SECTOR_AMOUNT
+	mov ch, 0
+	mov dh, 0
+	mov cl, 2	; (2) Sector segunda parte del codigo
+	mov ah, 2	; Funcion (2) para leer sectores
+	int 0x13
+	jmp 0x8000
+
+;; Subrutina Escritura = Entradas: SI = address of string, CX = length of string
 write_string:
-    mov ah, 0x0F
-    call set_cursor_position
-.next_char:
-    lodsb
-    or al, al
-    jz .done
-    mov ah, 0x0E
-    int 10h
-    jmp .next_char
-.done:
-    ret
-
-set_cursor_position:
-    mov ax, cx
-    mov dx, bx
-    mov ah, 02h
-    int 10h
-    ret
-
-main_loop:
-    call check_key_press
-    jmp main_loop
-
-check_key_press:
-    mov ah, 01h          ; Verificar si hay una tecla presionada
-    int 16h
-    jz no_key            ; Si no hay tecla presionada, saltar
-
-    mov ah, 0          ; Obtener la tecla presionada
-    int 16h
-
-    cmp ah, 48h          ; Si es 'W' (arriba)
-    je move_up
-    cmp ah, 50h          ; Si es 'S' (abajo)
-    je move_down
-    cmp ah, 4Bh          ; Si es 'A' (izquierda)
-    je move_left
-    cmp ah,20h     ; Verificar si la tecla presionada fue "Space"
-    jne salir_bootloader	; Si no fue "Space", espera
-no_key:
-    ret
-
-move_up:
-    call move_up_Joseph
-    call move_up_Ruben
-    call clear_screen
-    call write_string_Joseph
-    call write_string_Ruben
-    ret
-
-move_down:
-    call move_down_Joseph
-    call move_down_Ruben
-    call clear_screen
-    call write_string_Joseph
-    call write_string_Ruben
-    ret
-
-move_left:
-    call move_left_Joseph
-    call move_left_Ruben
-    call clear_screen
-    call write_string_Joseph
-    call write_string_Ruben
-    ret
-
-move_right:
-    call move_right_Joseph
-    call move_right_Ruben
-    call clear_screen
-    call write_string_Joseph
-    call write_string_Ruben
-    ret
-
-move_up_Joseph:
-    dec word [joseph_y]
-    cmp word [joseph_y], 0
-    jge done_move_up_Joseph
-    mov word [joseph_y], SCREEN_HEIGHT - 1
-done_move_up_Joseph:
-    ret
-
-move_down_Joseph:
-    inc word [joseph_y]
-    cmp word [joseph_y], SCREEN_HEIGHT
-    jge done_move_down_Joseph
-    mov word [joseph_y], 0
-done_move_down_Joseph:
-    ret
-
-move_left_Joseph:
-    dec word [joseph_x]
-    cmp word [joseph_x], 0
-    jge done_move_left_Joseph
-    mov word [joseph_x], SCREEN_WIDTH - STRING_LENGTH
-done_move_left_Joseph:
-    ret
-
-move_right_Joseph:
-    inc word [joseph_x]
-    cmp word [joseph_x], SCREEN_WIDTH - STRING_LENGTH
-    jle done_move_right_Joseph
-    mov word [joseph_x], 0
-done_move_right_Joseph:
-    ret
-
-move_up_Ruben:
-    dec word [ruben_y]
-    cmp word [ruben_y], 0
-    jge done_move_up_Ruben
-    mov word [ruben_y], SCREEN_HEIGHT - 1
-done_move_up_Ruben:
-    ret
-
-move_down_Ruben:
-    inc word [ruben_y]
-    cmp word [ruben_y], SCREEN_HEIGHT
-    jge done_move_down_Ruben
-    mov word [ruben_y], 0
-done_move_down_Ruben:
-    ret
-
-move_left_Ruben:
-    dec word [ruben_x]
-    cmp word [ruben_x], 0
-    jge done_move_left_Ruben
-    mov word [ruben_x], SCREEN_WIDTH - STRING_LENGTH
-done_move_left_Ruben:
-    ret
-
-move_right_Ruben:
-    inc word [ruben_x]
-    cmp word [ruben_x], SCREEN_WIDTH - STRING_LENGTH
-    jle done_move_right_Ruben
-    mov word [ruben_x], 0
-done_move_right_Ruben:
-    ret
-
-clear_screen:
-    mov ax, TEXT_MODE
-    int 10h
-    ret
-
-random_position_Joseph:
-    ;; Generar una posición X aleatoria dentro del rango de la pantalla para Joseph
-    in al, 40h
-    and al, 0x1F
-    mov bl, SCREEN_WIDTH - STRING_LENGTH
-    mul bl
-    mov [joseph_x], al
-
-    ;; Generar una posición Y aleatoria dentro del rango de la pantalla para Joseph
-    in al, 40h
-    and al, 0x1F
-    mov bl, SCREEN_HEIGHT - 1
-    mul bl
-    mov [joseph_y], al
-    ret
-
-random_position_Ruben:
-    ;; Generar una posición X aleatoria dentro del rango de la pantalla para Ruben
-    in al, 40h
-    and al, 0x1F
-    mov bl, SCREEN_WIDTH - STRING_LENGTH
-    mul bl
-    mov [ruben_x], al
-
-    ;; Generar una posición Y aleatoria dentro del rango de la pantalla para Ruben
-    in al, 40h
-    and al, 0x1F
-    mov bl, SCREEN_HEIGHT - 1
-    mul bl
-    mov [ruben_y], al
-    ret
-
-salir_bootloader:
-    ; Limpiar la pantalla antes de salir (opcional)
-    mov ax, TEXT_MODE
-    int 10h
-
-    ; Detener la ejecución (bucle infinito)
-    hlt
-    jmp $
-
-joseph_string db 'Joseph', 0
-ruben_string db 'Ruben', 0
-
-joseph_x dw 0
-joseph_y dw 0
-ruben_x dw 0
-ruben_y dw 0
+	mov ah, 27h	    ; BG color (2 = verde) FG color (7 = light gray) 
+	.loop:
+		lodsb       ; mov AL, [DS:SI] incrementa SI
+		stosw       ; Escribe caracter en Memoria (ES:DI)
+	loop .loop  	    ; Decrementa CX; if CX != 0, jmp to label
+	ret
 
 times 510-($-$$) db 0
-dw 0xAA55
+db 0x55
+db 0xaa   ;numero magico
